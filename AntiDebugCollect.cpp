@@ -305,6 +305,7 @@ VOID AntiDebugThread()
 VOID AntiAttach()
 {
     DWORD Self;
+    DWORD OldProtect;
     __asm
    {
 	PUSH 0
