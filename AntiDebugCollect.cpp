@@ -322,3 +322,20 @@ VOID AntiAttach()
 	MOV BYTE PTR[EAX + 1], 0
    }
 }
+BOOL AntiVMWare()
+{
+   BYTE Flags = 0;
+__asm
+	{
+		
+		MOV EAX,0x123456789
+		MOV EAX, 0x564D5868
+		MOV EBX, 0
+		MOV ECX,0xA
+		MOV EDX,0x5658
+		in EAX,DX
+		CMP EBX,0x564D5868
+		SETE Flags
+	}
+	return Flags;
+}
