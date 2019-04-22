@@ -10,11 +10,11 @@ BOOL ElevateDebugPrivileges()
 	HANDLE hToken;
 	TOKEN_PRIVILEGES tkp;
 	tkp.PrivilegeCount = 1;
-	if (!OpenProcessToken(GetCurrentProcess(),TOKEN_ADJUST_PRIVILEGES|TOKEN_QUERY,&hToken))//È¡µÃ½ø³ÌÁîÅÆ¾ä±ú.
-		return FALSE;//Ê§°Ü·µ»Ø0.
-	LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &tkp.Privileges[0].Luid);//»ñÈ¡¶ÔÆäËû½ø³Ì½øĞĞµ÷ÊÔµÄÌØÈ¨.
+	if (!OpenProcessToken(GetCurrentProcess(),TOKEN_ADJUST_PRIVILEGES|TOKEN_QUERY,&hToken))//å–å¾—è¿›ç¨‹ä»¤ç‰Œå¥æŸ„.
+		return FALSE;//å¤±è´¥è¿”å›0.
+	LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &tkp.Privileges[0].Luid);//è·å–å¯¹å…¶ä»–è¿›ç¨‹è¿›è¡Œè°ƒè¯•çš„ç‰¹æƒ.
 	tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-	if (!AdjustTokenPrivileges(hToken, FALSE, &tkp, sizeof(TOKEN_PRIVILEGES), NULL, NULL))//Éè¶¨´ò¿ª¸ÃÌØÈ¨
+	if (!AdjustTokenPrivileges(hToken, FALSE, &tkp, sizeof(TOKEN_PRIVILEGES), NULL, NULL))//è®¾å®šæ‰“å¼€è¯¥ç‰¹æƒ
 	{
 		return FALSE;
 	}
@@ -116,11 +116,11 @@ BOOL ElevatePrivilegesEx(DWORD DesiredAccess,LPCWSTR lpName,DWORD Attributes)
 	HANDLE hToken;
 	TOKEN_PRIVILEGES tkp;
 	tkp.PrivilegeCount = 1;
-	if (!OpenProcessToken(GetCurrentProcess(), DesiredAccess,&hToken))//È¡µÃ½ø³ÌÁîÅÆ¾ä±ú.
-		return FALSE;//Ê§°Ü·µ»Ø0.
+	if (!OpenProcessToken(GetCurrentProcess(), DesiredAccess,&hToken))//å–å¾—è¿›ç¨‹ä»¤ç‰Œå¥æŸ„.
+		return FALSE;//å¤±è´¥è¿”å›0.
 	LookupPrivilegeValue(NULL, lpName, &tkp.Privileges[0].Luid);
 	tkp.Privileges[0].Attributes = Attributes;
-	if (!AdjustTokenPrivileges(hToken,FALSE,&tkp, sizeof(TOKEN_PRIVILEGES), NULL, NULL))//Éè¶¨´ò¿ª¸ÃÌØÈ¨
+	if (!AdjustTokenPrivileges(hToken,FALSE,&tkp, sizeof(TOKEN_PRIVILEGES), NULL, NULL))//è®¾å®šæ‰“å¼€è¯¥ç‰¹æƒ
 	{
 		return FALSE;
 	}
@@ -274,7 +274,7 @@ PIMAGE_SECTION_HEADER GetSectionHeader(LPCWSTR lpModuleName)
 VOID DisableDebugEvent(VOID)
 {
 	HINSTANCE hModule;
-	ZW_SET_INFOMATION_THREAD ZwSetInformationThread;//ÉùÃ÷Ò»¸öZW_SET_INFOMATION_THREADÀàĞÍµÄº¯Êı,ÃüÃûÎªZwSetInformationThread
+	ZW_SET_INFOMATION_THREAD ZwSetInformationThread;//å£°æ˜ä¸€ä¸ªZW_SET_INFOMATION_THREADç±»å‹çš„å‡½æ•°,å‘½åä¸ºZwSetInformationThread
 	LPCWSTR pModuleName = L"ntdll";
 	hModule = GetModuleHandle(pModuleName);
 	ZwSetInformationThread = (ZW_SET_INFOMATION_THREAD)GetProcAddress(hModule,"ZwSetInformationThread");
@@ -428,4 +428,71 @@ typedef enum _KWAIT_REASON
 	MaximumWaitReason
 } KWAIT_REASON;
 
+NTSTATUS ProcessMemoryPatchByName(LPWSTR ProcessName, PVOID StartAddress, ULONG Size, PBYTE PatchBytes)
+{
+	DWORD OldProtect;
+	HANDLE hTargetHandle = GetProcessHandleByName(ProcessName);
 
+	if (StartAddress == 0 || PatchBytes == 0)
+	{
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	if (hTargetHandle == 0)
+	{
+		return STATUS_INVALID_HANDLE;
+	}
+
+	if (VirtualProtectEx(hTargetHandle, StartAddress, Size, PAGE_EXECUTE_READWRITE, &OldProtect) == 0)
+	{
+		return GetLastError();
+	}
+
+
+	if (WriteProcessMemory(hTargetHandle, StartAddress, PatchBytes, Size, 0) == 0)
+	{
+		VirtualProtectEx(hTargetHandle, StartAddress, Size, OldProtect, &OldProtect);
+		return GetLastError();
+	}
+	else
+	{
+		VirtualProtectEx(hTargetHandle, StartAddress, Size, OldProtect, &OldProtect);
+		return STATUS_SUCCESS;
+	}
+
+
+}
+NTSTATUS ProcessMemoryPatchByPID(HANDLE ProcessId, PVOID StartAddress, ULONG Size, PBYTE PatchBytes)
+{
+	DWORD OldProtect;
+	
+	HANDLE hTargetHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, (DWORD)ProcessId);
+	if (StartAddress == 0 || PatchBytes == 0)
+	{
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	if (hTargetHandle == 0)
+	{
+		return STATUS_INVALID_HANDLE;
+	}
+
+	if (VirtualProtectEx(hTargetHandle, StartAddress, Size, PAGE_EXECUTE_READWRITE, &OldProtect) == 0)
+	{
+		return GetLastError();
+	}
+
+
+	if (WriteProcessMemory(hTargetHandle, StartAddress, PatchBytes, Size, 0) == 0)
+	{
+		VirtualProtectEx(hTargetHandle, StartAddress, Size, OldProtect, &OldProtect);
+		return GetLastError();
+	}
+	else
+	{
+		VirtualProtectEx(hTargetHandle, StartAddress, Size, OldProtect, &OldProtect);
+		return STATUS_SUCCESS;
+	}
+
+
+}
